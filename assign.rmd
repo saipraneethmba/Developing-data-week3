@@ -1,0 +1,78 @@
+---
+title: "R markdown presentation and plotly"
+author: "p sai praneeth"
+date: "11/3/2020"
+output: html_document
+---
+
+```{r}
+rm(list=ls())
+library(plotly)
+library(data.table)
+library(tidyr)
+library(lubridate)
+library(zoo)
+
+pk1 <- fread("data/Accidents0514.csv", sep = ",")
+
+pk1 <- pk1 %>%
+    select(Accident_Severity, Date)
+
+pk2 <- fread("data/Accidents_2015.csv", sep = ",")
+pk2 <- pk2 %>%
+    select(Accident_Severity, Date)
+
+# combine and join the data tables
+pk3 <- rbind(pk1, pk2)
+rm(list = c("pk1", "pk2"))
+
+# factor table conversion
+pk3$Accident_Severity <- factor(pk3$Accident_Severity, levels = 1:3, labels = c("cFatal", "cSerious", "cSlight"))
+
+# conversion from data sting to objects
+pk3$Date <- dmy(pk3$Date)
+
+
+pk4 <- pk3 %>%
+    group_by(Date, Accident_Severity) %>%
+    summarise(count = n()) %>%
+    spread(key = Accident_Severity, value = count) %>% 
+    as.data.frame()
+
+# create a smoother for each severity to visualise general trends
+a1 <- loess(Slight ~ as.numeric(Date), data = pk4)
+b1 <- loess(Serious ~ as.numeric(Date), data = pk4)
+c1<- loess(Fatal ~ as.numeric(Date), data = pk4)
+
+# ploting the data
+plot_ly(pk4) %>%
+    add_trace(x = ~Date, y = ~Slight, type="scatter", mode = "markers", 
+              name = "slight", legendgroup = "slight", 
+              marker = list(color = "#52A9BD")) %>%
+    add_trace(x = ~Date, y = ~Serious, type="scatter", mode = "markers",
+              name = "serious", legendgroup = "serious", 
+              marker = list(color = "#FFF16B")) %>%
+    add_trace(x = ~Date, y = ~Fatal, type="scatter", mode = "markers",
+              name = "fatal", legendgroup = "fatal", 
+              marker = list(color = "red")) %>%
+    add_trace(x = as.Date(a1$x), y = fitted(a1),
+              type="scatter", mode = "lines",
+              line = list(color = 'blue'), 
+              name = "slight Loess smoother", legendgroup = "slight", 
+              hoverinfo = 'none', showlegend = FALSE) %>%
+    add_trace(x = as.Date(b1$x), y = fitted(b1),
+              type="scatter", mode = "lines",
+              line = list(color = 'green'),
+              name = "serious Loess smoother", legendgroup = "serious",
+              hoverinfo = 'none', showlegend = FALSE) %>%
+    add_lines(x = as.Date(c1$x), y = fitted(c1),
+              type="scatter", mode = "lines",
+              line = list(color = 'grey'),
+              name = "fatal Loess smoother", legendgroup = "fatal",
+              hoverinfo = 'none', showlegend = FALSE) %>%
+    layout(xaxis = list(title = "Year"),
+           yaxis = list(title = "No. of Accs")
+    )
+
+```
+
